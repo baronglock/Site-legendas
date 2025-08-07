@@ -1,0 +1,299 @@
+from typing import List, Dict, Optional
+import os
+import time
+import json
+from openai import OpenAI
+from config import Config
+
+class AISubtitleTranslator:
+    """
+    Tradutor profissional usando GPT-4 ou Claude para traduções contextuais
+    """
+    def __init__(self, provider: str = "openai", api_key: Optional[str] = None):
+        self.provider = provider
+        
+        if provider == "openai":
+            self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+            self.model = "gpt-4o"  # ou gpt-4, gpt-3.5-turbo
+        
+        else:
+            raise ValueError("Provider deve ser 'openai' ou 'anthropic'")
+    
+    def translate_segments(self, segments: List[Dict], 
+                         source_lang: str = 'en', 
+                         target_lang: str = 'pt-BR',
+                         video_context: str = "") -> List[Dict]:
+        """
+        Traduz segmentos com contexto completo para melhor qualidade
+        """
+        # Agrupa segmentos em blocos para tradução contextual
+        blocks = self._group_segments_for_context(segments)
+        translated_segments = []
+        
+        for i, block in enumerate(blocks):
+            print(f"Traduzindo bloco {i+1}/{len(blocks)}...")
+            
+            # Prepara contexto do bloco
+            block_text = self._prepare_block_text(block)
+            
+            # Traduz com IA
+            translated_text = self._translate_with_ai(
+                block_text, 
+                source_lang, 
+                target_lang,
+                video_context
+            )
+            
+            # Mapeia de volta para segmentos individuais
+            translated_block = self._map_translation_to_segments(
+                block, 
+                translated_text
+            )
+            
+            translated_segments.extend(translated_block)
+            
+            # Pequena pausa entre blocos
+            if i < len(blocks) - 1:
+                time.sleep(1)
+        
+        return translated_segments
+    
+    def _group_segments_for_context(self, segments: List[Dict], 
+                                   max_chars: int = 2000) -> List[List[Dict]]:
+        """
+        Agrupa segmentos em blocos para manter contexto
+        """
+        blocks = []
+        current_block = []
+        current_chars = 0
+        
+        for segment in segments:
+            segment_chars = len(segment['text'])
+            
+            # Se adicionar este segmento exceder o limite, cria novo bloco
+            if current_chars + segment_chars > max_chars and current_block:
+                blocks.append(current_block)
+                current_block = []
+                current_chars = 0
+            
+            current_block.append(segment)
+            current_chars += segment_chars
+        
+        if current_block:
+            blocks.append(current_block)
+        
+        return blocks
+    
+    def _prepare_block_text(self, block: List[Dict]) -> str:
+        """
+        Prepara texto do bloco com marcadores especiais
+        """
+        lines = []
+        for i, segment in enumerate(block):
+            # Marca cada segmento com ID único
+            lines.append(f"[SEG{i}] {segment['text']}")
+        
+        return "\n".join(lines)
+    
+    def _translate_with_ai(self, text: str, source_lang: str, 
+                        target_lang: str, video_context: str) -> str:
+        """
+        Traduz usando GPT-4 ou Claude com instruções específicas
+        """
+        try:
+            # Monta o prompt especializado
+            system_prompt = f"""Você é um tradutor profissional especializado em legendas.
+            
+    Traduza do {self._get_language_name(source_lang)} para o {self._get_language_name(target_lang)}.
+
+    REGRAS IMPORTANTES:
+    1. Mantenha os marcadores [SEG0], [SEG1], etc. EXATAMENTE como estão
+    2. Preserve o tom e registro do original
+    3. Use linguagem natural e fluente para legendas
+    4. Considere o contexto do vídeo: {video_context if video_context else 'vídeo educacional/profissional'}
+    5. Mantenha comprimento similar ao original (para sincronização)
+    6. Adapte expressões idiomáticas para equivalentes naturais
+    7. Para termos técnicos, use a tradução mais comum no Brasil
+    8. Evite traduções literais que soem artificiais
+
+    FORMATO: Retorne APENAS a tradução, mantendo uma linha por segmento."""
+
+            user_prompt = f"Traduza mantendo os marcadores [SEG]:\n\n{text}"
+            
+            print(f"=== INICIANDO TRADUÇÃO COM {self.provider.upper()} ===")
+            print(f"Modelo: {self.model}")
+            print(f"Idiomas: {source_lang} -> {target_lang}")
+            print(f"Texto a traduzir (primeiros 200 chars): {text[:200]}...")
+            
+            if self.provider == "openai":
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        temperature=0.3,  # Baixa para consistência
+                        max_tokens=4000
+                    )
+                    result = response.choices[0].message.content
+                    print(f"✓ Resposta recebida da OpenAI")
+                    print(f"Resposta (primeiros 200 chars): {result[:200]}...")
+                    return result
+                    
+                except Exception as api_error:
+                    print(f"❌ Erro da API OpenAI: {str(api_error)}")
+                    if "api_key" in str(api_error).lower():
+                        print("ERRO: Problema com a API Key")
+                    elif "rate" in str(api_error).lower():
+                        print("ERRO: Limite de rate atingido")
+                    elif "quota" in str(api_error).lower():
+                        print("ERRO: Cota excedida")
+                    raise api_error
+                    
+            else:  # anthropic
+                try:
+                    response = self.client.messages.create(
+                        model=self.model,
+                        max_tokens=4000,
+                        temperature=0.3,
+                        system=system_prompt,
+                        messages=[
+                            {"role": "user", "content": user_prompt}
+                        ]
+                    )
+                    result = response.content[0].text
+                    print(f"✓ Resposta recebida do Anthropic")
+                    return result
+                    
+                except Exception as api_error:
+                    print(f"❌ Erro da API Anthropic: {str(api_error)}")
+                    raise api_error
+                    
+        except Exception as e:
+            print(f"❌ ERRO GERAL na tradução: {type(e).__name__}: {str(e)}")
+            raise e
+    
+    def _map_translation_to_segments(self, original_block: List[Dict], 
+                                   translated_text: str) -> List[Dict]:
+        """
+        Mapeia tradução de volta para segmentos individuais
+        """
+        translated_lines = translated_text.strip().split('\n')
+        translated_segments = []
+        
+        print(f"\n=== DEBUG MAPPING ===")
+        print(f"Linhas traduzidas recebidas: {len(translated_lines)}")
+        print(f"Segmentos originais: {len(original_block)}")
+        
+        # Cria dicionário de traduções por ID
+        translations = {}
+        for line in translated_lines:
+            if line.strip():
+                # Extrai ID e texto
+                if '[SEG' in line:
+                    seg_id = line[line.find('[SEG')+4:line.find(']')]
+                    text = line[line.find(']')+1:].strip()
+                    translations[int(seg_id)] = text
+        
+        # Aplica traduções aos segmentos originais
+        for i, segment in enumerate(original_block):
+            translated_segment = segment.copy()
+            
+            if i in translations:
+                translated_segment['text'] = translations[i]
+                translated_segment['original_text'] = segment['text']
+            else:
+                # Fallback se não encontrar tradução
+                print(f"Aviso: Tradução não encontrada para segmento {i}")
+                translated_segment['text'] = segment['text']
+            
+            translated_segments.append(translated_segment)
+        
+        return translated_segments
+    
+    def _get_language_name(self, code: str) -> str:
+        """
+        Retorna nome completo do idioma
+        """
+        languages = {
+            'en': 'inglês',
+            'pt': 'português brasileiro',
+            'pt-BR': 'português brasileiro',
+            'es': 'espanhol',
+            'fr': 'francês',
+            'de': 'alemão',
+            'it': 'italiano',
+            'ja': 'japonês',
+            'zh': 'chinês'
+        }
+        return languages.get(code, code)
+    
+    def translate_with_glossary(self, segments: List[Dict], 
+                              glossary: Dict[str, str],
+                              source_lang: str = 'en',
+                              target_lang: str = 'pt-BR') -> List[Dict]:
+        """
+        Traduz com glossário de termos específicos
+        """
+        # Adiciona glossário ao contexto
+        glossary_text = "GLOSSÁRIO OBRIGATÓRIO:\n"
+        for term, translation in glossary.items():
+            glossary_text += f"- {term} → {translation}\n"
+        
+        # Modifica o prompt do sistema para incluir glossário
+        system_prompt_addition = f"\n\n{glossary_text}\nUSE SEMPRE as traduções do glossário acima."
+        
+        # Procede com tradução normal mas com contexto do glossário
+        return self.translate_segments(
+            segments, 
+            source_lang, 
+            target_lang,
+            video_context=system_prompt_addition
+        )
+
+class BatchAITranslator:
+    """
+    Versão otimizada para traduzir múltiplos vídeos com cache
+    """
+    def __init__(self, provider: str = "openai", api_key: Optional[str] = None):
+        self.translator = AISubtitleTranslator(provider, api_key)
+        self.cache = {}
+        self.cache_file = Config.TEMP_DIR / "translation_cache.json"
+        self._load_cache()
+    
+    def _load_cache(self):
+        """Carrega cache de traduções anteriores"""
+        if self.cache_file.exists():
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                self.cache = json.load(f)
+    
+    def _save_cache(self):
+        """Salva cache de traduções"""
+        with open(self.cache_file, 'w', encoding='utf-8') as f:
+            json.dump(self.cache, f, ensure_ascii=False, indent=2)
+    
+    def translate_with_cache(self, text: str, source_lang: str = 'en', 
+                           target_lang: str = 'pt-BR') -> str:
+        """
+        Traduz com cache para economizar tokens
+        """
+        # Gera chave de cache
+        cache_key = f"{source_lang}:{target_lang}:{text[:50]}"
+        
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        # Traduz se não estiver em cache
+        segments = [{"text": text, "start": 0, "end": 1}]
+        translated = self.translator.translate_segments(
+            segments, source_lang, target_lang
+        )
+        
+        if translated:
+            result = translated[0]['text']
+            self.cache[cache_key] = result
+            self._save_cache()
+            return result
+        
+        return text

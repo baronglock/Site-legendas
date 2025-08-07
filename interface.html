@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerador de Legendas - Upload</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .tab-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #f0f3ff;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        input[type="url"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="url"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .checkbox-container input {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .status.show {
+            display: block;
+        }
+        
+        .status.loading {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #90caf9;
+        }
+        
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+        }
+        
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+        
+        .downloads {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .downloads.show {
+            display: block;
+        }
+        
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .download-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+        
+        .download-link:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #eee;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .progress-bar.show {
+            display: block;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #667eea;
+            width: 0%;
+            transition: width 0.3s;
+            animation: progress-animation 2s ease-in-out infinite;
+        }
+        
+        @keyframes progress-animation {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .file-info {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .file-info.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Gerador de Legendas</h1>
+        <p class="subtitle">Transcrição e tradução automática com IA</p>
+        
+        <div class="tab-container">
+            <button class="tab active" onclick="switchTab('upload')">📤 Upload de Arquivo</button>
+            <button class="tab" onclick="switchTab('url')">🔗 URL do Vimeo</button>
+        </div>
+        
+        <!-- Tab Upload -->
+        <div id="upload-tab" class="tab-content active">
+            <div class="upload-area" onclick="document.getElementById('videoFile').click()" 
+                 ondrop="handleDrop(event)" 
+                 ondragover="handleDragOver(event)" 
+                 ondragleave="handleDragLeave(event)">
+                <div class="upload-icon">📹</div>
+                <p><strong>Clique para selecionar</strong> ou arraste o vídeo aqui</p>
+                <p style="font-size: 12px; color: #999; margin-top: 10px;">
+                    Formatos: MP4, MOV, AVI, MKV, WEBM (máx. 1GB)
+                </p>
+            </div>
+            
+            <input type="file" id="videoFile" accept=".mp4,.mov,.avi,.mkv,.webm" onchange="handleFileSelect(event)">
+            
+            <div class="file-info" id="fileInfo"></div>
+            
+            <div class="checkbox-container">
+                <input type="checkbox" id="translateUpload" checked>
+                <label for="translateUpload">Traduzir para Português (IA)</label>
+            </div>
+            
+            <button id="uploadBtn" onclick="uploadVideo()" disabled>
+                Processar Vídeo
+            </button>
+        </div>
+        
+        <!-- Tab URL -->
+        <div id="url-tab" class="tab-content">
+            <input type="url" id="vimeoUrl" placeholder="https://vimeo.com/123456789" />
+            
+            <div class="checkbox-container">
+                <input type="checkbox" id="translateUrl" checked>
+                <label for="translateUrl">Traduzir para Português (IA)</label>
+            </div>
+            
+            <button id="urlBtn" onclick="processUrl()">
+                Gerar Legendas
+            </button>
+        </div>
+        
+        <div class="status" id="status"></div>
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <div class="downloads" id="downloads">
+            <h3>📥 Downloads Disponíveis:</h3>
+            <div class="download-grid" id="downloadGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+
+        function switchTab(tab) {
+            // Remove active de todas as tabs
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            // Ativa a tab selecionada
+            if (tab === 'upload') {
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('upload-tab').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('url-tab').classList.add('active');
+            }
+            
+            // Limpa status
+            hideStatus();
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect({ target: { files: files } });
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                showFileInfo(file);
+                document.getElementById('uploadBtn').disabled = false;
+            }
+        }
+
+        function showFileInfo(file) {
+            const info = document.getElementById('fileInfo');
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            info.innerHTML = `
+                <strong>📁 Arquivo:</strong> ${file.name}<br>
+                <strong>📊 Tamanho:</strong> ${sizeMB} MB
+            `;
+            info.classList.add('show');
+        }
+
+        function showStatus(message, type = 'loading') {
+            const status = document.getElementById('status');
+            status.className = `status show ${type}`;
+            status.innerHTML = message;
+            
+            if (type === 'loading') {
+                document.getElementById('progressBar').classList.add('show');
+                animateProgress();
+            } else {
+                document.getElementById('progressBar').classList.remove('show');
+            }
+        }
+
+        function hideStatus() {
+            document.getElementById('status').classList.remove('show');
+            document.getElementById('progressBar').classList.remove('show');
+            document.getElementById('downloads').classList.remove('show');
+        }
+
+        function animateProgress() {
+            let width = 0;
+            const fill = document.getElementById('progressFill');
+            const interval = setInterval(() => {
+                width += Math.random() * 15;
+                if (width > 90) width = 90;
+                fill.style.width = width + '%';
+            }, 500);
+            
+            // Guarda o interval para parar depois
+            fill.dataset.interval = interval;
+        }
+
+        function stopProgress() {
+            const fill = document.getElementById('progressFill');
+            clearInterval(fill.dataset.interval);
+            fill.style.width = '100%';
+        }
+
+        async function uploadVideo() {
+            if (!selectedFile) {
+                alert('Selecione um arquivo!');
+                return;
+            }
+
+            const btn = document.getElementById('uploadBtn');
+            btn.disabled = true;
+            btn.textContent = 'Processando...';
+
+            showStatus('📤 Enviando vídeo...', 'loading');
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            const translate = document.getElementById('translateUpload').checked;
+
+            try {
+                // Upload
+                const response = await fetch(`http://localhost:8000/upload-video?translate_to_pt=${translate}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    stopProgress();
+                    showStatus(
+                        `✅ Sucesso!<br>
+                        ⏱️ Tempo: ${data.processing_time}s<br>
+                        🌐 Idioma detectado: ${data.detected_language}
+                        ${data.was_translated ? '<br>✅ Traduzido para PT-BR' : ''}`,
+                        'success'
+                    );
+                    
+                    showDownloads(data.downloads);
+                } else {
+                    throw new Error(data.detail || 'Erro desconhecido');
+                }
+            } catch (error) {
+                showStatus(`❌ Erro: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Processar Vídeo';
+            }
+        }
+
+        async function processUrl() {
+            const url = document.getElementById('vimeoUrl').value;
+            if (!url) {
+                alert('Digite uma URL!');
+                return;
+            }
+
+            const btn = document.getElementById('urlBtn');
+            btn.disabled = true;
+            btn.textContent = 'Processando...';
+
+            showStatus('🔄 Baixando vídeo do Vimeo...', 'loading');
+
+            const translate = document.getElementById('translateUrl').checked;
+
+            try {
+                const response = await fetch('http://localhost:8000/subtitle', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vimeo_url: url,
+                        translate_to_pt: translate
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    stopProgress();
+                    showStatus(
+                        `✅ Sucesso!<br>
+                        ⏱️ Tempo: ${data.processing_time.toFixed(1)}s<br>
+                        🌐 Idioma: ${data.detected_language}
+                        ${data.was_translated ? '<br>✅ Traduzido para PT-BR' : ''}`,
+                        'success'
+                    );
+                    
+                    // Monta downloads
+                    const downloads = {
+                        srt_original: data.srt_path,
+                        vtt_original: data.vtt_path,
+                        json: data.json_path,
+                        srt_portuguese: data.srt_translated_path,
+                        vtt_portuguese: data.vtt_translated_path
+                    };
+                    
+                    showDownloads(downloads);
+                } else {
+                    throw new Error(data.detail || data.error || 'Erro desconhecido');
+                }
+            } catch (error) {
+                showStatus(`❌ Erro: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Gerar Legendas';
+            }
+        }
+
+        function showDownloads(downloads) {
+            const container = document.getElementById('downloads');
+            const grid = document.getElementById('downloadGrid');
+            
+            grid.innerHTML = '';
+            
+            const links = [
+                { key: 'srt_original', label: '📄 SRT Original', icon: '🇺🇸' },
+                { key: 'vtt_original', label: '📄 VTT Original', icon: '🇺🇸' },
+                { key: 'json', label: '📋 JSON', icon: '📊' },
+                { key: 'srt_portuguese', label: '📄 SRT Português', icon: '🇧🇷' },
+                { key: 'vtt_portuguese', label: '📄 VTT Português', icon: '🇧🇷' }
+            ];
+            
+            links.forEach(link => {
+                if (downloads[link.key]) {
+                    const a = document.createElement('a');
+                    
+                    // Se for arquivo português, usa o novo endpoint
+                    if (link.key === 'srt_portuguese' || link.key === 'vtt_portuguese') {
+                        // Extrai o video_id da URL
+                        const parts = downloads[link.key].split('/');
+                        const videoId = parts[2].replace('_pt', ''); // Remove o _pt
+                        const format = link.key.includes('srt') ? 'srt' : 'vtt';
+                        
+                        a.href = `http://localhost:8000/download-translated/${videoId}/${format}`;
+                    } else {
+                        // Arquivos originais usam o endpoint normal
+                        a.href = `http://localhost:8000${downloads[link.key]}`;
+                    }
+                    
+                    a.className = 'download-link';
+                    a.download = true;
+                    a.innerHTML = `${link.icon} ${link.label}`;
+                    grid.appendChild(a);
+                }
+            });
+            
+            container.classList.add('show');
+        }
+
+        // Permite Enter para enviar URL
+        document.getElementById('vimeoUrl').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') processUrl();
+        });
+    </script>
+</body>
+</html>

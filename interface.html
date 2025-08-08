@@ -447,15 +447,14 @@
                     showStatus(
                         `✅ Sucesso!<br>
                         ⏱️ Tempo: ${data.processing_time}s<br>
-                        🌐 Idioma detectado: ${data.detected_language}
-                        ${data.was_translated ? '<br>✅ Traduzido para PT-BR' : ''}`,
+                        🌐 Idioma detectado: ${data.detected_language}<br>
+                        ${data.detected_language !== 'pt' ? '💡 Clique em "SRT/VTT Português" para traduzir' : ''}`,
                         'success'
                     );
                     
                     showDownloads(data.downloads);
-                } else {
-                    throw new Error(data.detail || 'Erro desconhecido');
                 }
+        
             } catch (error) {
                 showStatus(`❌ Erro: ${error.message}`, 'error');
             } finally {
@@ -534,30 +533,57 @@
                 { key: 'srt_original', label: '📄 SRT Original', icon: '🇺🇸' },
                 { key: 'vtt_original', label: '📄 VTT Original', icon: '🇺🇸' },
                 { key: 'json', label: '📋 JSON', icon: '📊' },
-                { key: 'srt_portuguese', label: '📄 SRT Português', icon: '🇧🇷' },
-                { key: 'vtt_portuguese', label: '📄 VTT Português', icon: '🇧🇷' }
+                { key: 'srt_portuguese', label: '📄 SRT Português', icon: '🇧🇷', onDemand: true },
+                { key: 'vtt_portuguese', label: '📄 VTT Português', icon: '🇧🇷', onDemand: true }
             ];
             
             links.forEach(link => {
                 if (downloads[link.key]) {
                     const a = document.createElement('a');
-                    
-                    // Se for arquivo português, usa o novo endpoint
-                    if (link.key === 'srt_portuguese' || link.key === 'vtt_portuguese') {
-                        // Extrai o video_id da URL
-                        const parts = downloads[link.key].split('/');
-                        const videoId = parts[2].replace('_pt', ''); // Remove o _pt
-                        const format = link.key.includes('srt') ? 'srt' : 'vtt';
-                        
-                        a.href = `http://localhost:8000/download-translated/${videoId}/${format}`;
-                    } else {
-                        // Arquivos originais usam o endpoint normal
-                        a.href = `http://localhost:8000${downloads[link.key]}`;
-                    }
-                    
+                    a.href = `http://localhost:8000${downloads[link.key]}`;
                     a.className = 'download-link';
                     a.download = true;
-                    a.innerHTML = `${link.icon} ${link.label}`;
+                    
+                    // Adiciona indicador de tradução sob demanda
+                    if (link.onDemand) {
+                        a.innerHTML = `${link.icon} ${link.label} <small style="opacity: 0.7">(traduz ao clicar)</small>`;
+                        
+                        // Adiciona evento para mostrar loading durante tradução
+                        a.addEventListener('click', function(e) {
+                            if (!this.dataset.translated) {
+                                e.preventDefault();
+                                const originalHtml = this.innerHTML;
+                                this.innerHTML = `${link.icon} Traduzindo... ⏳`;
+                                this.style.pointerEvents = 'none';
+                                
+                                // Faz download real
+                                fetch(this.href)
+                                    .then(response => response.blob())
+                                    .then(blob => {
+                                        // Marca como traduzido
+                                        this.dataset.translated = 'true';
+                                        this.innerHTML = `${link.icon} ${link.label} ✓`;
+                                        this.style.pointerEvents = 'auto';
+                                        
+                                        // Dispara download
+                                        const url = window.URL.createObjectURL(blob);
+                                        const tempLink = document.createElement('a');
+                                        tempLink.href = url;
+                                        tempLink.download = this.download;
+                                        tempLink.click();
+                                        window.URL.revokeObjectURL(url);
+                                    })
+                                    .catch(err => {
+                                        this.innerHTML = originalHtml + ' ❌';
+                                        this.style.pointerEvents = 'auto';
+                                        alert('Erro na tradução: ' + err.message);
+                                    });
+                            }
+                        });
+                    } else {
+                        a.innerHTML = `${link.icon} ${link.label}`;
+                    }
+                    
                     grid.appendChild(a);
                 }
             });

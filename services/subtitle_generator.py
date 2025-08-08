@@ -1,3 +1,4 @@
+# services/subtitle_generator.py - VERSÃO CORRIGIDA
 from typing import List, Dict, Tuple
 from pathlib import Path
 import json
@@ -21,6 +22,11 @@ class SubtitleGenerator:
         if segments:
             print(f"Primeiro segmento: {segments[0].get('text', 'SEM TEXTO')[:50]}...")
             print(f"Campos disponíveis: {list(segments[0].keys())}")
+            # Debug adicional para verificar se está traduzido
+            if 'original_text' in segments[0]:
+                print(f"TRADUÇÃO DETECTADA!")
+                print(f"Original: {segments[0].get('original_text', '')[:50]}...")
+                print(f"Traduzido: {segments[0].get('text', '')[:50]}...")
         print("================================\n")
         
         # Otimiza quebras de linha
@@ -50,16 +56,28 @@ class SubtitleGenerator:
             text = segment["text"]
             words = segment.get("words", [])
             
+            # Preserva informação de tradução se existir
+            base_segment = {
+                "id": len(optimized) + 1,
+                "text": text
+            }
+            
+            # Copia campos extras importantes
+            if "original_text" in segment:
+                base_segment["original_text"] = segment["original_text"]
+            
             # Se tem informação de palavras, usa para melhor timing
             if words:
                 lines = self._split_with_word_timing(words, max_width, max_lines)
                 for i, line_data in enumerate(lines):
-                    optimized.append({
+                    new_segment = base_segment.copy()
+                    new_segment.update({
                         "id": len(optimized) + 1,
                         "start": line_data["start"],
                         "end": line_data["end"],
                         "text": line_data["text"]
                     })
+                    optimized.append(new_segment)
             else:
                 # Fallback para divisão simples
                 lines = self._split_text(text, max_width, max_lines)
@@ -67,12 +85,14 @@ class SubtitleGenerator:
                 time_per_line = duration / len(lines)
                 
                 for i, line in enumerate(lines):
-                    optimized.append({
+                    new_segment = base_segment.copy()
+                    new_segment.update({
                         "id": len(optimized) + 1,
                         "start": segment["start"] + (i * time_per_line),
                         "end": segment["start"] + ((i + 1) * time_per_line),
                         "text": line
                     })
+                    optimized.append(new_segment)
         
         return optimized
     
@@ -150,6 +170,14 @@ class SubtitleGenerator:
                 f.write(f"{i}\n")
                 f.write(f"{start_time} --> {end_time}\n")
                 f.write(f"{segment['text']}\n\n")
+        
+        # Debug: verifica conteúdo do arquivo gerado
+        print(f"\n=== VERIFICANDO SRT GERADO: {srt_path.name} ===")
+        with open(srt_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()[:10]  # Primeiras 10 linhas
+            for line in lines:
+                print(f"  {line.strip()}")
+        print("===================================\n")
         
         return srt_path
     

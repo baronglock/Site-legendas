@@ -340,7 +340,7 @@ async def root():
 @app.post("/upload-video")
 async def upload_video_manual(
     file: UploadFile = File(...),
-    translate_to_pt: bool = True,
+    translate_to_pt: bool = True,  # Mantém por compatibilidade mas não usa
     language: str = "auto",
     background_tasks: BackgroundTasks = BackgroundTasks()
 ):
@@ -384,7 +384,6 @@ async def upload_video_manual(
                 detail=f"Erro na extração de áudio: {audio_result['error']}"
             )
         
-        # 3. Transcrição
         print("Iniciando transcrição...")
         model_name = Config.WHISPER_MODEL
         transcriber = get_transcriber(model_name)
@@ -404,21 +403,7 @@ async def upload_video_manual(
         detected_language = transcription_result["language"]
         original_segments = transcription_result["segments"]
         
-        # 4. Tradução (se necessário)
-        translated_segments = None
-        was_translated = False
-        
-        if translate_to_pt and detected_language != 'pt':
-            try:
-                print(f"Traduzindo de {detected_language} para pt-BR...")
-                translated_segments = translator.translate_segments(
-                    original_segments,
-                    source_lang=detected_language,
-                    target_lang='pt'
-                )
-                was_translated = True
-            except Exception as e:
-                print(f"Erro na tradução: {e}")
+    
         
         # 5. Geração de legendas
         subtitle_paths = subtitle_generator.generate_subtitles(
@@ -428,15 +413,7 @@ async def upload_video_manual(
             max_line_count=2
         )
         
-        # 6. Legendas traduzidas
-        translated_paths = {}
-        if translated_segments:
-            translated_paths = subtitle_generator.generate_subtitles(
-                translated_segments,
-                f"{video_id}_pt",
-                max_line_width=42,
-                max_line_count=2
-            )
+    
         
         # Agenda limpeza
         background_tasks.add_task(
@@ -454,13 +431,14 @@ async def upload_video_manual(
             "filename": file.filename,
             "processing_time": round(processing_time, 2),
             "detected_language": detected_language,
-            "was_translated": was_translated,
+            "was_translated": False,  # Sempre false agora
             "downloads": {
                 "srt_original": f"/download/{video_id}/srt",
                 "vtt_original": f"/download/{video_id}/vtt",
                 "json": f"/download/{video_id}/json",
-                "srt_portuguese": f"/download/{video_id}_pt/srt" if was_translated else None,
-                "vtt_portuguese": f"/download/{video_id}_pt/vtt" if was_translated else None
+                # Indica que tradução está disponível sob demanda
+                "srt_portuguese": f"/download-translated/{video_id}/srt" if detected_language != 'pt' else None,
+                "vtt_portuguese": f"/download-translated/{video_id}/vtt" if detected_language != 'pt' else None
             }
         }
         
@@ -475,135 +453,70 @@ async def test_upload_page():
     """Retorna página de teste de upload"""
     return HTMLResponse(content=open("interface.html", "r", encoding="utf-8").read())
 
-@app.get("/download-translated/{video_id}/{format}")
-async def download_translated_realtime(video_id: str, format: str):
 
+@app.get("/download-translated/{video_id}/{format}")
+async def download_translated_on_demand(video_id: str, format: str):
     """
-    Tradução inteligente que junta fragmentos pequenos
+    Tradução inteligente sob demanda - traduz apenas quando solicitado
     """
+    if format not in ["srt", "vtt"]:
+        raise HTTPException(400, "Apenas SRT e VTT suportados")
     
-    # Define a função auxiliar DENTRO do endpoint
-    def calculate_duration(start_time: str, end_time: str) -> float:
-        """Calcula duração em segundos"""
-        def time_to_seconds(time_str):
-            time_str = time_str.replace(',', '.')
-            h, m, s = time_str.split(':')
-            return float(h) * 3600 + float(m) * 60 + float(s)
-        
-        return time_to_seconds(end_time) - time_to_seconds(start_time)
+    # Verifica se já existe tradução em cache
+    cached_path = Config.SUBTITLE_DIR / f"{video_id}_pt.{format}"
+    if cached_path.exists():
+        print(f"Usando tradução em cache: {cached_path}")
+        return FileResponse(
+            path=cached_path,
+            filename=f"{video_id}_Portuguese.{format}",
+            media_type="text/plain"
+        )
     
-    if format != "srt":
-        raise HTTPException(400, "Apenas SRT suportado")
-    
+    # Se não existe, traduz agora
     original_path = Config.SUBTITLE_DIR / f"{video_id}.{format}"
+    if not original_path.exists():
+        raise HTTPException(404, "Arquivo original não encontrado")
     
+    print(f"Traduzindo sob demanda: {video_id}")
+    
+    # Lê o arquivo original
     with open(original_path, 'r', encoding='utf-8') as f:
         content = f.read()
     
-    # Primeiro, processa o SRT para juntar fragmentos
-    blocks = content.strip().split('\n\n')
-    processed_blocks = []
+    # Usa o tradutor já configurado
+    try:
+        # Para SRT, traduz diretamente
+        if format == "srt":
+            translated_content = translator.translate_srt_file(
+                content,
+                source_lang='en',
+                target_lang='pt'
+            )
+        else:  # VTT
+            # Converte VTT para formato similar ao SRT para tradução
+            translated_content = translator.translate_vtt_file(
+                content,
+                source_lang='en', 
+                target_lang='pt'
+            )
+        
+        # Salva em cache para próximas vezes
+        with open(cached_path, 'w', encoding='utf-8') as f:
+            f.write(translated_content)
+        
+        print(f"Tradução concluída e salva em cache: {cached_path}")
+        
+        return FileResponse(
+            path=cached_path,
+            filename=f"{video_id}_Portuguese.{format}",
+            media_type="text/plain"
+        )
+        
+    except Exception as e:
+        print(f"Erro na tradução: {e}")
+        raise HTTPException(500, f"Erro na tradução: {str(e)}")
     
-    i = 0
-    while i < len(blocks):
-        lines = blocks[i].strip().split('\n')
-        if len(lines) >= 3:
-            current_number = lines[0]
-            current_timing = lines[1]
-            current_text = ' '.join(lines[2:])
-            
-            # Pega o tempo inicial
-            start_time = current_timing.split(' --> ')[0]
-            end_time = current_timing.split(' --> ')[1]
-            
-            # Verifica próximos blocos para juntar fragmentos
-            combined_text = current_text
-            j = i + 1
-            
-            while j < len(blocks):
-                next_lines = blocks[j].strip().split('\n')
-                if len(next_lines) >= 3:
-                    next_text = ' '.join(next_lines[2:])
-                    next_end_time = next_lines[1].split(' --> ')[1]
-                    
-                    # Condições para juntar:
-                    should_merge = False
-                    
-                    # Verifica se deve juntar
-                    if len(next_text.split()) <= 3:  # 3 palavras ou menos
-                        should_merge = True
-                    elif next_text[0].islower():  # Começa com minúscula
-                        should_merge = True
-                    elif not current_text.strip().endswith(('.', '!', '?', ':')):  # Não tem pontuação final
-                        should_merge = True
-                    
-                    # Verifica duração total (SEM self.)
-                    if should_merge:
-                        total_duration = calculate_duration(start_time, next_end_time)  # ← CORRIGIDO
-                        if total_duration > 4.0:  # Máximo 4 segundos
-                            should_merge = False
-                    
-                    if should_merge:
-                        combined_text += ' ' + next_text
-                        end_time = next_end_time
-                        j += 1
-                    else:
-                        break
-                else:
-                    break
-            
-            # Cria bloco combinado
-            new_timing = f"{start_time} --> {end_time}"
-            processed_block = f"{current_number}\n{new_timing}\n{combined_text}"
-            processed_blocks.append(processed_block)
-            
-            i = j  # Pula os blocos que foram combinados
-        else:
-            processed_blocks.append(blocks[i])
-            i += 1
     
-    # Reconstrói o SRT processado
-    processed_content = '\n\n'.join(processed_blocks)
-    
-    # Agora traduz com GPT
-    from openai import OpenAI
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    
-    prompt = f"""Traduza este arquivo SRT do inglês para português brasileiro.
-
-REGRAS IMPORTANTES:
-1. Mantenha EXATAMENTE os mesmos números e timings
-2. Traduza de forma natural e fluente
-3. O texto deve caber confortavelmente no tempo disponível
-4. Mantenha frases completas sempre que possível
-5. Use linguagem coloquial para legendas
-
-SRT para traduzir:
-{processed_content}
-
-Retorne APENAS o SRT traduzido, mantendo o formato exato."""
-
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "Você é um tradutor especialista em legendagem."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.3,
-        max_tokens=4000
-    )
-    
-    translated_srt = response.choices[0].message.content
-    translated_srt = translated_srt.replace("```srt", "").replace("```", "").strip()
-    
-    return Response(
-        content=translated_srt,
-        media_type="text/plain; charset=utf-8",
-        headers={
-            "Content-Disposition": f"attachment; filename={video_id}_Portuguese_Smart.{format}"
-        }
-    )
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

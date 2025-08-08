@@ -14,7 +14,7 @@ class AISubtitleTranslator:
         
         if provider == "openai":
             self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
-            self.model = "gpt-4o"  # ou gpt-4, gpt-3.5-turbo
+            self.model = "gpt-5-mini"  # ou gpt-4, gpt-3.5-turbo
         
         else:
             raise ValueError("Provider deve ser 'openai' ou 'anthropic'")
@@ -133,8 +133,7 @@ class AISubtitleTranslator:
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt}
                         ],
-                        temperature=0.3,  # Baixa para consistência
-                        max_tokens=4000
+
                     )
                     result = response.choices[0].message.content
                     print(f"✓ Resposta recebida da OpenAI")
@@ -251,6 +250,86 @@ class AISubtitleTranslator:
             target_lang,
             video_context=system_prompt_addition
         )
+    
+    def translate_srt_file(self, srt_content: str, source_lang: str = 'en', 
+                           target_lang: str = 'pt') -> str:
+        """
+        Traduz arquivo SRT completo mantendo formatação
+        """
+        blocks = srt_content.strip().split('\n\n')
+        translated_blocks = []
+        
+        # Agrupa blocos para tradução mais eficiente
+        text_to_translate = []
+        block_info = []
+        
+        for block in blocks:
+            lines = block.strip().split('\n')
+            if len(lines) >= 3:
+                number = lines[0]
+                timing = lines[1]
+                text = ' '.join(lines[2:])
+                
+                text_to_translate.append(f"[BLOCK{len(block_info)}] {text}")
+                block_info.append((number, timing))
+            else:
+                # Bloco inválido, mantém como está
+                translated_blocks.append(block)
+        
+        # Traduz todos os textos de uma vez
+        if text_to_translate:
+            full_text = '\n'.join(text_to_translate)
+            
+            # Usa a tradução com IA já configurada
+            translated_text = self._translate_with_ai(
+                full_text,
+                source_lang,
+                target_lang,
+                "Arquivo de legendas SRT"
+            )
+            
+            # Mapeia de volta para blocos
+            translated_lines = translated_text.strip().split('\n')
+            
+            for line in translated_lines:
+                if line.strip() and '[BLOCK' in line:
+                    # Extrai índice e texto
+                    match = line.find(']')
+                    if match > 0:
+                        block_idx = int(line[line.find('[BLOCK')+6:match])
+                        translated_text = line[match+1:].strip()
+                        
+                        if block_idx < len(block_info):
+                            number, timing = block_info[block_idx]
+                            translated_block = f"{number}\n{timing}\n{translated_text}"
+                            translated_blocks.append(translated_block)
+        
+        return '\n\n'.join(translated_blocks)
+    
+    def translate_vtt_file(self, vtt_content: str, source_lang: str = 'en',
+                          target_lang: str = 'pt') -> str:
+        """
+        Traduz arquivo VTT (similar ao SRT mas com header WEBVTT)
+        """
+        # Remove header WEBVTT
+        lines = vtt_content.split('\n')
+        header = []
+        content_start = 0
+        
+        for i, line in enumerate(lines):
+            if '-->' in line:
+                content_start = max(0, i - 1)
+                break
+            header.append(line)
+        
+        # Pega só o conteúdo (sem header)
+        srt_like_content = '\n'.join(lines[content_start:])
+        
+        # Traduz como SRT
+        translated_content = self.translate_srt_file(srt_like_content, source_lang, target_lang)
+        
+        # Reconstrói com header VTT
+        return '\n'.join(header) + '\n' + translated_content
 
 class BatchAITranslator:
     """

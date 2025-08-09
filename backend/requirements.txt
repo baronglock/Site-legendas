@@ -1,0 +1,43 @@
+# FastAPI e Web
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+aiofiles==23.2.1
+
+# Banco de dados
+supabase==2.3.0
+sqlalchemy==2.0.23
+
+# Storage e AWS
+boto3==1.34.14
+botocore==1.34.14
+
+# Queue e Cache
+redis==5.0.1
+celery==5.3.4
+
+# AI e ML
+openai==1.6.1
+tiktoken==0.5.2
+faster-whisper==0.10.0
+torch>=2.0.0
+torchaudio
+numpy<2
+
+# Video/Audio
+ffmpeg-python==0.2.0
+yt-dlp==2023.12.30
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Pagamentos
+stripe==7.8.0
+
+# Monitoring (opcional)
+sentry-sdk[fastapi]==1.39.1

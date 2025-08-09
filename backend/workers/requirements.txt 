@@ -1,0 +1,21 @@
+# RunPod
+runpod==1.3.0
+
+# AI/ML
+faster-whisper==0.10.0
+openai==1.6.1
+torch>=2.0.0
+torchaudio
+
+# Banco de dados
+supabase==2.3.0
+
+# Storage
+boto3==1.34.14
+
+# Utilities
+requests==2.31.0
+python-dotenv==1.0.0
+
+# Áudio/Vídeo
+ffmpeg-python==0.2.0

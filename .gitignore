@@ -1,18 +1,134 @@
-# Ambientes Virtuais
-/venv
-/.venv
-/env
-/.env
-
-# Arquivos de Cache do Python
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
 
-# Arquivos de configuração de IDEs
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Ambiente e configurações locais
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local
+
+# IDEs e Editores
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Sistema Operacional
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+lerna-debug.log*
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.cache
+tmp/
+temp/
+
+# Arquivos de mídia temporários (do seu projeto)
+backend/temp/
+backend/temp_videos/
+backend/temp_audio/
+backend/temp_subtitles/
+uploads/
+downloads/
+
+# Banco de dados local
+*.db
+*.sqlite
+*.sqlite3
+
+# Arquivos de teste
+coverage/
+.nyc_output/
+
+# Certificados e chaves
+*.pem
+*.key
+*.crt
+*.p12
+
+# Arquivos específicos do projeto que não devem ir pro Git
+cookies.txt
+cookies_example.txt
+test_*.mp4
+test_*.srt
+test_*.vtt
+
+# Cache de tradução (se houver)
+translation_cache.json
+
+# Arquivos grandes de modelo (Whisper)
+*.pt
+*.pth
+models/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
 
 # Outros
-.DS_Store
+.cache/
+.parcel-cache/
+.nuxt/
+.vuepress/dist
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port

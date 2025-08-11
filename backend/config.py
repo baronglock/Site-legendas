@@ -3,6 +3,29 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+env_file = os.getenv('ENV_FILE', '.env')
+load_dotenv(env_file)
+
+class Config:
+    # Environment
+    ENV = os.getenv("ENVIRONMENT", "development")
+    DEBUG = ENV == "development"
+    
+    # Modo local (sem serviços externos)
+    USE_LOCAL_STORAGE = os.getenv("USE_LOCAL_STORAGE", "false").lower() == "true"
+    SKIP_PAYMENT = os.getenv("SKIP_PAYMENT", "false").lower() == "true"
+    SKIP_EMAIL = os.getenv("SKIP_EMAIL", "false").lower() == "true"
+    SKIP_R2 = os.getenv("SKIP_R2", "false").lower() == "true"
+    
+    # Paths personalizados para desenvolvimento
+    if ENV == "development":
+        BASE_DIR = Path("/storage/legendas-master")
+        TEMP_DIR = Path(os.getenv("TEMP_DIR", "/storage/legendas-master/temp"))
+        MODEL_PATH = Path(os.getenv("MODEL_PATH", "/storage/legendas-master/models"))
+    else:
+        BASE_DIR = Path(__file__).parent
+        TEMP_DIR = Path(os.getenv("TEMP_DIR", "./temp"))
+        
 load_dotenv()
 
 class Config:

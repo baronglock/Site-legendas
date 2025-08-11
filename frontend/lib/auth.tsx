@@ -33,15 +33,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem('token')
+      
+      // MODO LOCAL - usar dados do localStorage
+      const savedUser = localStorage.getItem('user')
+      if (savedUser) {
+        setUser(JSON.parse(savedUser))
+        setLoading(false)
+        return
+      }
+      
       if (!token) {
         setLoading(false)
         return
       }
 
-      const response = await apiClient.getMe()
-      setUser(response.data)
+      // Tenta pegar do servidor
+      try {
+        const response = await apiClient.getMe()
+        const userData = {
+          id: response.data.id,
+          email: response.data.email,
+          plan: response.data.plan || 'free',
+          minutesRemaining: response.data.usage?.minutes_available || 1000,
+          minutesTotal: response.data.usage?.minutes_limit || 1000,
+          jobsCompleted: 0
+        }
+        setUser(userData)
+        localStorage.setItem('user', JSON.stringify(userData))
+      } catch (error) {
+        console.log('Usando modo mock local')
+      }
     } catch (error) {
+      console.error('Erro auth:', error)
       localStorage.removeItem('token')
+      localStorage.removeItem('user')
     } finally {
       setLoading(false)
     }
@@ -51,7 +76,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await apiClient.login({ email })
       localStorage.setItem('token', response.data.access_token)
-      setUser(response.data.user)
+      
+      const userData = {
+        id: response.data.user_id || 'mock_user',
+        email: email,
+        plan: 'free',
+        minutesRemaining: 1000,
+        minutesTotal: 1000,
+        jobsCompleted: 0
+      }
+      
+      setUser(userData)
+      localStorage.setItem('user', JSON.stringify(userData))
       router.push('/dashboard')
     } catch (error) {
       throw error
@@ -60,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem('token')
+    localStorage.removeItem('user')
     setUser(null)
     router.push('/')
   }

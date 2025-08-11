@@ -1,181 +1,155 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import Layout from '@/components/Layout'
-import UploadForm from '@/components/UploadForm'
-import JobStatus from '@/components/JobStatus'
-import UsageStats from '@/components/UsageStats'
 import { useAuth } from '@/lib/auth'
-import { Upload, Clock, TrendingUp, Gift } from 'lucide-react'
+import Layout from '@/components/Layout'
+import { 
+  Upload, 
+  FileText, 
+  BarChart3, 
+  CreditCard, 
+  Clock,
+  Download,
+  AlertCircle
+} from 'lucide-react'
+import UploadForm from '@/components/UploadForm'
+import UsageStats from '@/components/UsageStats'
+import JobsList from '@/components/JobsList'
+import { apiClient } from '@/lib/api'  // Adicionar este import
 import toast from 'react-hot-toast'
 
 export default function Dashboard() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('upload')
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
-
+  const [jobs, setJobs] = useState([])  // Adicionar este estado
+  const [stats, setStats] = useState<any>(null)
+  
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login')
     }
   }, [user, loading, router])
 
-  // Simular quando usuário está perto do limite
+  // Adicionar esta função
   useEffect(() => {
-    if (user && user.minutesRemaining < 5 && user.plan === 'free') {
-      setTimeout(() => {
-        toast((t) => (
-          <div>
-            <p className="font-bold">⏰ Apenas {user.minutesRemaining} minutos restantes!</p>
-            <p className="text-sm">Faça upgrade para continuar sem interrupções</p>
-            <button 
-              onClick={() => {
-                toast.dismiss(t.id)
-                setShowUpgradeModal(true)
-              }}
-              className="mt-2 bg-purple-600 text-white px-4 py-1 rounded text-sm"
-            >
-              Ver Planos
-            </button>
-          </div>
-        ), { duration: 6000 })
-      }, 2000)
+    if (activeTab === 'jobs' && user) {
+      fetchJobs()
+      const interval = setInterval(fetchJobs, 3000)
+      return () => clearInterval(interval)
     }
-  }, [user])
+  }, [activeTab, user])
 
-  if (loading) return <div>Carregando...</div>
+  // Adicionar esta função
+  const fetchJobs = async () => {
+    try {
+      const response = await apiClient.getJobs()
+      setJobs(response.data.jobs)
+    } catch (error) {
+      console.error('Erro ao buscar jobs:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        </div>
+      </Layout>
+    )
+  }
+
+  if (!user) return null
+
+  const tabs = [
+    { id: 'upload', name: 'Novo Upload', icon: Upload },
+    { id: 'jobs', name: 'Processados', icon: FileText },
+    { id: 'stats', name: 'Estatísticas', icon: BarChart3 },
+  ]
 
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header com Stats */}
+        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Dashboard</h1>
-          
-          {/* Card de uso atual */}
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-6 text-white mb-6">
-            <div className="grid md:grid-cols-3 gap-6">
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-2 text-gray-600">
+            Bem-vindo, {user.email}
+          </p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-purple-200 text-sm">Plano Atual</p>
-                <p className="text-2xl font-bold capitalize">{user?.plan || 'Free'}</p>
+                <p className="text-sm font-medium text-gray-600">Minutos Disponíveis</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {user.minutesRemaining || 0}
+                </p>
               </div>
-              <div>
-                <p className="text-purple-200 text-sm">Minutos Restantes</p>
-                <p className="text-2xl font-bold">{user?.minutesRemaining || 0} min</p>
-                <div className="w-full bg-purple-800 rounded-full h-2 mt-2">
-                  <div 
-                    className="bg-yellow-400 h-2 rounded-full transition-all"
-                    style={{ width: `${(user?.minutesRemaining / user?.minutesTotal) * 100}%` }}
-                  />
-                </div>
-              </div>
-              <div>
-                <p className="text-purple-200 text-sm">Economia vs Concorrente</p>
-                <p className="text-2xl font-bold">R$ {((user?.jobsCompleted || 0) * 17.4).toFixed(2)}</p>
-              </div>
+              <Clock className="h-8 w-8 text-purple-600" />
             </div>
           </div>
 
-          {/* Bonus/Indicação */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <Gift className="h-5 w-5 text-yellow-600 mr-2" />
-                <span className="text-sm">
-                  <strong>Ganhe 10 minutos extras!</strong> Indique um amigo e ambos ganham créditos.
-                </span>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Arquivos Processados</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {jobs.length}
+                </p>
               </div>
-              <button className="text-yellow-600 hover:text-yellow-700 text-sm font-medium">
-                Indicar Agora
-              </button>
+              <FileText className="h-8 w-8 text-blue-600" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Plano Atual</p>
+                <p className="text-2xl font-bold text-gray-900 capitalize">
+                  {user.plan || 'Free'}
+                </p>
+              </div>
+              <CreditCard className="h-8 w-8 text-green-600" />
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8">
-            <button
-              onClick={() => setActiveTab('upload')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'upload'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Upload className="inline h-4 w-4 mr-2" />
-              Novo Upload
-            </button>
-            <button
-              onClick={() => setActiveTab('jobs')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'jobs'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Clock className="inline h-4 w-4 mr-2" />
-              Trabalhos Recentes
-            </button>
-            <button
-              onClick={() => setActiveTab('stats')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'stats'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <TrendingUp className="inline h-4 w-4 mr-2" />
-              Estatísticas
-            </button>
-          </nav>
-        </div>
+        <div className="bg-white rounded-lg shadow">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+              {tabs.map((tab) => {
+                const Icon = tab.icon
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`
+                      flex items-center py-4 px-1 border-b-2 font-medium text-sm
+                      ${activeTab === tab.id
+                        ? 'border-purple-500 text-purple-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }
+                    `}
+                  >
+                    <Icon className="mr-2 h-5 w-5" />
+                    {tab.name}
+                  </button>
+                )
+              })}
+            </nav>
+          </div>
 
-        {/* Content */}
-        <div>
-          {activeTab === 'upload' && <UploadForm />}
-          {activeTab === 'jobs' && <JobStatus />}
-          {activeTab === 'stats' && <UsageStats />}
-        </div>
-      </div>
-
-      {/* Modal de Upgrade */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 max-w-md w-full">
-            <h3 className="text-2xl font-bold mb-4">Seus minutos estão acabando!</h3>
-            <p className="text-gray-600 mb-6">
-              Faça upgrade agora e continue legendando sem interrupções.
-            </p>
-            <div className="space-y-4">
-              <div className="border rounded-lg p-4 hover:border-purple-500 cursor-pointer">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h4 className="font-bold">Plano Pro</h4>
-                    <p className="text-sm text-gray-600">5 horas/mês</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold">R$ 49</p>
-                    <p className="text-xs text-gray-500">R$ 9,80/hora</p>
-                  </div>
-                </div>
-              </div>
-              <button 
-                onClick={() => router.push('/pricing')}
-                className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700"
-              >
-                Ver Todos os Planos
-              </button>
-              <button 
-                onClick={() => setShowUpgradeModal(false)}
-                className="w-full text-gray-500 text-sm"
-              >
-                Continuar com plano atual
-              </button>
-            </div>
+          <div className="p-6">
+            {activeTab === 'upload' && <UploadForm />}
+            {activeTab === 'jobs' && <JobsList />}
+            {activeTab === 'stats' && <UsageStats />}
           </div>
         </div>
-      )}
+      </div>
     </Layout>
   )
 }

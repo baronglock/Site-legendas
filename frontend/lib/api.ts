@@ -2,6 +2,9 @@ import axios from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
 
+// Console.log DEPOIS de definir API_URL
+console.log('🔧 API configurada para:', API_URL)
+
 const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -37,9 +40,12 @@ export const apiClient = {
   getMe: () => api.get('/auth/me'),
   
   // Subtitle
-  uploadFile: (formData: FormData) => api.post('/subtitle/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  }),
+  uploadFile: (formData: FormData) => {
+    console.log('📤 Chamando uploadFile')
+    return api.post('/subtitle/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
   processUrl: (data: any) => api.post('/subtitle/url', data),
   getJob: (jobId: string) => api.get(`/subtitle/job/${jobId}`),
   
